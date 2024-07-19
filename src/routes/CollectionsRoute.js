@@ -1,9 +1,10 @@
-import _ from 'lodash';
-import { useRef, useEffect, useState } from 'react';
+import { get } from 'lodash';
 import PropTypes from 'prop-types';
+import { useRef, useEffect, useState } from 'react';
 import { FormattedMessage } from 'react-intl';
+import { useQuery } from 'react-query';
 
-import { stripesConnect } from '@folio/stripes/core';
+import { stripesConnect, useOkapiKy } from '@folio/stripes/core';
 import { Layout } from '@folio/stripes/components';
 import {
   makeQueryFunction,
@@ -33,6 +34,25 @@ const CollectionsRoute = ({
     // Create initial source
     return new StripesConnectedSource({ resources, mutator }, stripes.logger, 'collections');
   });
+
+  const MDSOURCE_API = 'finc-config/tiny-metadata-sources';
+
+  const useMdSources = () => {
+    const ky = useOkapiKy();
+
+    const { isLoading, data: mdSources = [], ...rest } = useQuery(
+      [MDSOURCE_API],
+      () => ky.get(`${MDSOURCE_API}`).json(),
+    );
+
+    return ({
+      isLoading,
+      mdSources,
+      ...rest,
+    });
+  };
+
+  const { mdSources, isLoading: isLoadingMdSources } = useMdSources();
 
   useEffect(() => {
     const oldCount = source.totalCount();
@@ -64,7 +84,7 @@ const CollectionsRoute = ({
   };
 
   const queryGetter = () => {
-    return _.get(resources, 'query', {});
+    return get(resources, 'query', {});
   };
 
   const handleNeedMoreData = () => {
@@ -89,9 +109,9 @@ const CollectionsRoute = ({
 
   return (
     <MetadataCollections
-      contentData={_.get(resources, 'collections.records', [])}
+      contentData={get(resources, 'collections.records', [])}
       collection={source}
-      filterData={{ mdSources: _.get(resources, 'mdSources.records', []) }}
+      filterData={!isLoadingMdSources ? { mdSources: get(mdSources, 'tinyMetadataSources', []) } : { mdSources: [] }}
       onNeedMoreData={handleNeedMoreData}
       queryGetter={queryGetter}
       querySetter={querySetter}
@@ -129,12 +149,6 @@ CollectionsRoute.manifest = Object.freeze({
       },
       staticFallback: { params: {} },
     },
-  },
-  mdSources: {
-    type: 'okapi',
-    records: 'tinyMetadataSources',
-    path: 'finc-config/tiny-metadata-sources',
-    resourceShouldRefresh: true
   },
   query: { initialValue: {} },
   resultCount: { initialValue: INITIAL_RESULT_COUNT },
